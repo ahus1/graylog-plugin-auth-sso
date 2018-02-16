@@ -194,7 +194,7 @@ public class SsoAuthRealmTest {
         m.put("roles_1", Arrays.asList(new String[]{"asdf1"}));
         m.put("roles_2", Arrays.asList(new String[]{"asdf2"}));
         
-        SsoAuthRealm r = new SsoAuthRealm(null, null, null, null);
+        SsoAuthRealm r = new SsoAuthRealm(null, null, null, null, null);
         Optional<List<String>> s = r.headerValues(m, "Roles");
         Set<String> actual = r.csv(s.get());
         List<String> expected = Arrays.asList(new String[]{"role1","role2","role3","asdf1","asdf2"});
@@ -255,7 +255,7 @@ public class SsoAuthRealmTest {
         
         when(userService.save(u)).thenReturn("user");
         
-        SsoAuthRealm r = new SsoAuthRealm(userService, null, roleService, null);
+        SsoAuthRealm r = new SsoAuthRealm(userService, null, roleService, null, null);
         r.syncUserRoles(rolesCsv, u);
         
         verify(u).getRoleIds();
