@@ -38,14 +38,16 @@ import org.graylog2.utilities.IpSubnet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Named;
 import javax.ws.rs.core.MultivaluedMap;
 import java.net.UnknownHostException;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+
+import static org.graylog.plugins.auth.sso.HeaderRoleUtil.*;
 
 public class SsoAuthRealm extends AuthenticatingRealm {
     private static final Logger LOG = LoggerFactory.getLogger(SsoAuthRealm.class);
@@ -163,11 +165,37 @@ public class SsoAuthRealm extends AuthenticatingRealm {
             }
             LOG.trace("Trusted header {} set, continuing with user name {}", usernameHeader, user.getName());
 
+            if (config.syncRoles()) {
+                Optional<List<String>> rolesList = headerValues(requestHeaders, config.rolesHeader());
+                if (rolesList.isPresent()) {
+                    try {
+                        syncUserRoles(rolesList.get(), user);
+                    } catch (ValidationException e) {
+                        LOG.error(
+                                "Unable to sync roles [{}] of user {} from http header. Not logging in with http header.",
+                                rolesList.get(), user, e);
+                        return null;
+                    }
+                }
+            }
+
             ShiroSecurityContext.requestSessionCreation(true);
             return new SimpleAccount(user.getName(), null, NAME);
         }
         LOG.debug("Trusted header {} is not set.", usernameHeader);
         return null;
+    }
+
+    protected void syncUserRoles(List<String> roleCsv, User user) throws ValidationException {
+        Set<String> roleNames = csv(roleCsv);
+        Set<String> existingRoles = user.getRoleIds();
+
+        Set<String> syncedRoles = getRoleIds(roleService, roleNames);
+
+        if (!existingRoles.equals(syncedRoles)) {
+            user.setRoleIds(syncedRoles);
+            userService.save(user);
+        }
     }
 
     @VisibleForTesting
@@ -182,13 +210,6 @@ public class SsoAuthRealm extends AuthenticatingRealm {
                         return false;
                     }
                 });
-    }
-
-    private Optional<String> headerValue(MultivaluedMap<String, String> headers, @Nullable String headerName) {
-        if (headerName == null) {
-            return Optional.empty();
-        }
-        return Optional.ofNullable(headers.getFirst(headerName.toLowerCase()));
     }
 
 }
